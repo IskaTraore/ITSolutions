@@ -1,0 +1,612 @@
+// ==================== ITSOLUTIONS - SCHÉMA PRISMA ====================
+// Conforme au cahier des charges ITNET Solutions (Hotspot centralisé FreeRADIUS)
+// et à ITSOLUTIONS_DOCUMENTATION_EXHAUSTIVE.md (Partie II).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== UTILISATEURS ====================
+
+model User {
+  id                         String     @id @default(cuid())
+  email                      String     @unique
+  username                   String     @unique
+  passwordHash               String
+  emailVerified              Boolean    @default(false)
+  verificationTokenHash      String?
+  verificationTokenExpiresAt DateTime?
+  role                       UserRole   @default(USER)
+  status                     UserStatus @default(ACTIVE)
+  autoRenew                  Boolean    @default(false)
+  phone                      String?
+
+  // 2FA (Two-Factor Authentication)
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorSecret      String? // Clé secrète TOTP (base32)
+  twoFactorBackupCodes String[] @default([]) // Hashes SHA-256 des codes de récupération
+  usedBackupCodes      String[] @default([]) // Codes de récupération déjà utilisés
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallet        Wallet?
+  routers       Router[]
+  sessions      Session[]
+  notifications Notification[]
+  payments      Payment[]
+  auditLogs     AuditLog[]     @relation("ActorLogs")
+
+  // RADIUS / Hotspot centralisé
+  radiusNas         RadiusNas[]
+  hotspotGroups     HotspotGroup[]
+  hotspotSites      HotspotSite[]
+  hotspotProfiles   HotspotProfile[]
+  hotspotVouchers   HotspotVoucher[]
+  radiusUsers       RadiusUser[]
+  radiusSessions    RadiusSession[]
+  radiusAccountings RadiusAccounting[]
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPPORT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+model Session {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id])
+  tokenHash             String    @unique
+  refreshTokenHash      String?   @unique
+  refreshTokenExpiresAt DateTime?
+  userAgent             String?
+  ipAddress             String?
+  expiresAt             DateTime
+  revokedAt             DateTime?
+  createdAt             DateTime  @default(now())
+}
+
+// ==================== WALLET ====================
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  balance   Int      @default(0)
+  currency  String   @default("FC")
+  updatedAt DateTime @updatedAt
+
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id              String            @id @default(cuid())
+  walletId        String
+  wallet          Wallet            @relation(fields: [walletId], references: [id])
+  type            TransactionType
+  amount          Int
+  balanceAfter    Int
+  status          TransactionStatus @default(COMPLETED)
+  idempotencyKey  String            @unique
+  relatedRouterId String?
+  paymentId       String?
+  payment         Payment?          @relation(fields: [paymentId], references: [id])
+  description     String
+  createdAt       DateTime          @default(now())
+}
+
+enum TransactionType {
+  RECHARGE
+  ROUTER_CREATION_DEBIT
+  ROUTER_RENEWAL_DEBIT
+  REFUND
+  ADMIN_ADJUSTMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+// ==================== PAIEMENTS ====================
+
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  amount      Int
+  method      PaymentMethod
+  provider    String
+  providerRef String?       @unique
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  confirmedAt DateTime?
+
+  walletTransactions WalletTransaction[]
+}
+
+enum PaymentMethod {
+  MOBILE_MONEY
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+// ==================== ROUTEURS ====================
+
+model Router {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+  name           String
+  routerOsFamily RouterOsFamily
+  status         RouterStatus   @default(PENDING_PROVISIONING)
+  model          String?
+
+  // État des intégrations (cahier des charges §8)
+  mikhmonStatus MikhmonStatus @default(NOT_CONFIGURED)
+  radiusStatus  RadiusStatus  @default(NOT_CONFIGURED)
+
+  vpnCredential      VpnCredential?
+  mikhmonWorkspaceId String?
+  mikhmonWorkspace   MikhmonWorkspace? @relation(fields: [mikhmonWorkspaceId], references: [id])
+
+  radiusNasId String?    @unique
+  radiusNas   RadiusNas? @relation(fields: [radiusNasId], references: [id])
+
+  apiPort    Int? @unique
+  winboxPort Int? @unique
+
+  subscription Subscription?
+
+  // Suppression logique (cahier des charges §27 / §41 Phase 4)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+}
+
+enum RouterOsFamily {
+  V6_TO_7_9
+  V7_10_PLUS
+}
+
+enum RouterStatus {
+  PENDING_PROVISIONING
+  PROVISIONING
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  FAILED
+}
+
+enum MikhmonStatus {
+  NOT_CONFIGURED
+  ACTIVE
+  ERROR
+}
+
+enum RadiusStatus {
+  NOT_CONFIGURED
+  ACTIVE
+  SUSPENDED
+}
+
+model VpnCredential {
+  id           String   @id @default(cuid())
+  routerId     String   @unique
+  router       Router   @relation(fields: [routerId], references: [id])
+  vpnServer    String
+  username     String   @unique
+  passwordHash String
+  vpnIp        String?  @unique
+  protocol     String   @default("L2TP")
+  createdAt    DateTime @default(now())
+}
+
+// ==================== MIKHMON ====================
+
+model MikhmonWorkspace {
+  id                   String         @id @default(cuid())
+  name                 String         @unique
+  version              RouterOsFamily
+  url                  String         @unique
+  webfigUrl            String
+  adminUsername        String         @default("admin")
+  adminPasswordHash    String
+  adminPasswordChanged Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+
+  routers Router[]
+}
+
+// ==================== ABONNEMENTS ====================
+
+model Subscription {
+  id            String             @id @default(cuid())
+  routerId      String             @unique
+  router        Router             @relation(fields: [routerId], references: [id])
+  monthlyPrice  Int                @default(23000)
+  startedAt     DateTime           @default(now())
+  expiresAt     DateTime
+  autoRenew     Boolean            @default(false)
+  status        SubscriptionStatus @default(ACTIVE)
+  lastRenewedAt DateTime?
+
+  renewals SubscriptionRenewal[]
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRING
+  EXPIRING_SOON
+  EXPIRED
+  SUSPENDED
+}
+
+model SubscriptionRenewal {
+  id             String        @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id])
+  amount         Int
+  method         RenewalMethod
+  createdAt      DateTime      @default(now())
+}
+
+enum RenewalMethod {
+  AUTO
+  MANUAL
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id])
+  channel   NotificationChannel
+  type      String
+  payload   Json
+  sentAt    DateTime?
+  status    NotificationStatus  @default(PENDING)
+  createdAt DateTime            @default(now())
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ==================== RADIUS / HOTSPOT CENTRALISÉ ====================
+// Cahier des charges §6, §12, §13, §14, §16, §17, §18, §30.
+// FreeRADIUS centralise l'Authentication / Authorization / Accounting ;
+// chaque NAS, groupe, profil, voucher, session est rattaché à un tenant (owner).
+
+enum NasStatus {
+  ACTIVE
+  SUSPENDED
+  ERROR
+}
+
+// Un routeur Hotspot devient un NAS / RADIUS Client (cahier des charges §6, §12).
+model RadiusNas {
+  id               String    @id @default(cuid())
+  ownerId          String
+  owner            User      @relation(fields: [ownerId], references: [id])
+  nasIdentifier    String    @unique // ex: kavumu-001, nguba-002 (unique global RADIUS)
+  name             String
+  address          String? // IP VPN ou IP publique du NAS
+  secretHash       String // secret RADIUS hashé — jamais exposé en clair (§22)
+  secretRotatedAt  DateTime?
+  status           NasStatus @default(ACTIVE)
+  lastSeenAt       DateTime?
+  lastAuthAt       DateTime?
+  lastAccessAccept DateTime?
+  lastAccessReject DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  router     Router? // back-relation (FK : Router.radiusNasId)
+  site       HotspotSite?
+  sessions   RadiusSession[]
+  accounting RadiusAccounting[]
+
+  @@index([ownerId])
+}
+
+// Groupes ou réseaux Hotspot (cahier des charges §14). Ex : BUKAVU-CENTRAL.
+model HotspotGroup {
+  id          String   @id @default(cuid())
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sites      HotspotSite[]
+  profiles   HotspotProfile[]
+  vouchers   HotspotVoucher[]
+  users      RadiusUser[]
+  sessions   RadiusSession[]
+  accounting RadiusAccounting[]
+
+  @@unique([ownerId, name])
+}
+
+// Un site (Kavumu, Nguba…) possède son propre MikroTik/NAS (§3).
+model HotspotSite {
+  id        String       @id @default(cuid())
+  ownerId   String
+  owner     User         @relation(fields: [ownerId], references: [id])
+  groupId   String
+  group     HotspotGroup @relation(fields: [groupId], references: [id])
+  name      String
+  location  String?
+  nasId     String?      @unique
+  nas       RadiusNas?   @relation(fields: [nasId], references: [id])
+  createdAt DateTime     @default(now())
+
+  sessions   RadiusSession[]
+  accounting RadiusAccounting[]
+
+  @@unique([groupId, name])
+}
+
+// Profils Hotspot : 10 min, 1 h, 3 h… 30 jours (§17).
+model HotspotProfile {
+  id              String        @id @default(cuid())
+  ownerId         String
+  owner           User          @relation(fields: [ownerId], references: [id])
+  groupId         String?
+  group           HotspotGroup? @relation(fields: [groupId], references: [id])
+  name            String
+  durationMinutes Int
+  price           Int           @default(0) // FC
+  downloadRate    Int? // kbps
+  uploadRate      Int? // kbps
+  quotaMb         Int? // quota total en Mo
+  maxDevices      Int           @default(1)
+  macPolicy       MacPolicy     @default(ALLOW)
+  validDays       Int? // validité après achat
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  vouchers HotspotVoucher[]
+  users    RadiusUser[]
+
+  @@unique([ownerId, groupId, name])
+}
+
+enum MacPolicy {
+  ALLOW
+  BLOCK
+  BYPASS
+}
+
+// Vouchers : code + mot de passe, profil, groupe, durée, quota, MAC (§16).
+model HotspotVoucher {
+  id           String         @id @default(cuid())
+  ownerId      String
+  owner        User           @relation(fields: [ownerId], references: [id])
+  groupId      String
+  group        HotspotGroup   @relation(fields: [groupId], references: [id])
+  profileId    String
+  profile      HotspotProfile @relation(fields: [profileId], references: [id])
+  code         String // username affiché au client
+  passwordHash String
+  status       VoucherStatus  @default(UNUSED)
+  macAddress   String? // politique MAC
+  firstUsedAt  DateTime?
+  lastUsedAt   DateTime?
+  expiresAt    DateTime? // première utilisation + durée du profil
+  timesUsed    Int            @default(0)
+  devices      Int            @default(0) // appareils simultanés
+  createdAt    DateTime       @default(now())
+
+  user RadiusUser?
+
+  @@unique([ownerId, code])
+}
+
+enum VoucherStatus {
+  UNUSED
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+// Compte RADIUS (utilisateur Hotspot) rattaché à un tenant et un groupe (§13).
+model RadiusUser {
+  id           String           @id @default(cuid())
+  ownerId      String
+  owner        User             @relation(fields: [ownerId], references: [id])
+  groupId      String
+  group        HotspotGroup     @relation(fields: [groupId], references: [id])
+  voucherId    String?          @unique
+  voucher      HotspotVoucher?  @relation(fields: [voucherId], references: [id])
+  profileId    String?
+  profile      HotspotProfile?  @relation(fields: [profileId], references: [id])
+  username     String
+  passwordHash String
+  status       RadiusUserStatus @default(ACTIVE)
+  macAddress   String?
+  expiresAt    DateTime?
+  lastAuthAt   DateTime?
+  createdAt    DateTime         @default(now())
+
+  sessions   RadiusSession[]
+  accounting RadiusAccounting[]
+
+  @@unique([ownerId, username])
+}
+
+enum RadiusUserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+// Sessions actives (cahier des charges §19).
+model RadiusSession {
+  id             String        @id @default(cuid())
+  ownerId        String
+  owner          User          @relation(fields: [ownerId], references: [id])
+  groupId        String?
+  group          HotspotGroup? @relation(fields: [groupId], references: [id])
+  nasId          String?
+  nas            RadiusNas?    @relation(fields: [nasId], references: [id])
+  siteId         String?
+  site           HotspotSite?  @relation(fields: [siteId], references: [id])
+  userId         String?
+  user           RadiusUser?   @relation(fields: [userId], references: [id])
+  username       String
+  sessionId      String        @unique // Acct-Session-Id
+  ipAddress      String?
+  macAddress     String?
+  startedAt      DateTime      @default(now())
+  downloadOctets BigInt        @default(0)
+  uploadOctets   BigInt        @default(0)
+  lastActivityAt DateTime      @default(now())
+  status         SessionStatus @default(ACTIVE)
+
+  @@index([ownerId, status])
+}
+
+enum SessionStatus {
+  ACTIVE
+  BLOCKED
+}
+
+// Accounting RADIUS — historique des sessions (§18).
+model RadiusAccounting {
+  id              String        @id @default(cuid())
+  ownerId         String
+  owner           User          @relation(fields: [ownerId], references: [id])
+  groupId         String?
+  group           HotspotGroup? @relation(fields: [groupId], references: [id])
+  nasId           String?
+  nas             RadiusNas?    @relation(fields: [nasId], references: [id])
+  siteId          String?
+  site            HotspotSite?  @relation(fields: [siteId], references: [id])
+  userId          String?
+  user            RadiusUser?   @relation(fields: [userId], references: [id])
+  username        String
+  sessionId       String
+  ipAddress       String?
+  macAddress      String?
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSeconds Int?
+  downloadOctets  BigInt        @default(0)
+  uploadOctets    BigInt        @default(0)
+  disconnectCause String?
+  lastActivityAt  DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([ownerId, startedAt])
+}
+
+// ==================== PRODUITS (boutique) ====================
+
+model Product {
+  id            String          @id @default(cuid())
+  name          String
+  model         String
+  category      ProductCategory
+  categoryLabel String
+  price         Int
+  oldPrice      Int?
+  rating        Float           @default(4.5)
+  reviews       Int             @default(0)
+  visual        ProductVisual
+  hue           ProductHue
+  badge         ProductBadge?
+  stock         ProductStock    @default(IN)
+  specs         String[]
+  description   String?
+  imageUrl      String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+enum ProductCategory {
+  ROUTEURS
+  ANTENNES_CPE
+  SWITCHES
+  ACCESSOIRES
+}
+
+enum ProductVisual {
+  HAP_AC2
+  HEX
+  HAPLITE
+  SXT
+  MANTBOX
+  OMNITIK
+  SWITCH
+  POE_KIT
+}
+
+enum ProductHue {
+  INDIGO
+  VIOLET
+  TEAL
+  SKY
+  EMERALD
+  AMBER
+  ROSE
+  CYAN
+}
+
+enum ProductBadge {
+  PROMO
+  NOUVEAU
+  BEST_SELLER
+}
+
+enum ProductStock {
+  IN
+  LIMITED
+  ORDER
+}
+
+// ==================== AUDIT ====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("ActorLogs", fields: [actorId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}

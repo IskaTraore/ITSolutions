@@ -1,0 +1,162 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Virtual Server ITSOLUTIONS — FreeRADIUS
+#
+# Ce serveur virtuel gère l'authentification et l'accounting des Hotspot
+# MikroTik connectés via L2TP/IPsec.
+#
+# Architecture :
+#   MikroTik (NAS) → FreeRADIUS (Auth/Acct) → PostgreSQL (ITSOLUTIONS DB)
+#                                                  ↕
+#                                            Backend API (stats, webhooks)
+#
+# Installation :
+#   cp itsolutions /etc/freeradius/3.0/sites-available/itsolutions
+#   ln -sf /etc/freeradius/3.0/sites-available/itsolutions \
+#          /etc/freeradius/3.0/sites-enabled/itsolutions
+#   rm -f /etc/freeradius/3.0/sites-enabled/default  # désactiver le serveur par défaut
+#   systemctl restart freeradius
+# ═══════════════════════════════════════════════════════════════════════════════
+
+server itsolutions {
+
+    # ─── LISTEN : Authentification (port 1812 UDP) ───────────────────────────
+    listen {
+        type = auth
+        ipaddr = *
+        port = 1812
+
+        limit {
+            max_connections = 1024
+            lifetime = 0
+            idle_timeout = 30
+        }
+    }
+
+    # ─── LISTEN : Accounting (port 1813 UDP) ─────────────────────────────────
+    listen {
+        type = acct
+        ipaddr = *
+        port = 1813
+
+        limit {
+            max_connections = 1024
+            lifetime = 0
+            idle_timeout = 30
+        }
+    }
+
+    # ─── LISTEN : CoA (Change of Authorization — port 3799 UDP) ──────────────
+    # Permet au serveur de déconnecter/forcer un client Hotspot.
+    listen {
+        type = coa
+        ipaddr = *
+        port = 3799
+
+        limit {
+            max_connections = 16
+            lifetime = 0
+            idle_timeout = 30
+        }
+    }
+
+    # ─── AUTHORIZATION ───────────────────────────────────────────────────────
+    # Exécuté avant l'authentification. Vérifie les NAS et les attributs.
+
+    authorize {
+        # Préprocessing des attributs
+        preprocess
+
+        # Vérification du NAS client (clients.conf)
+        chap
+
+        # MS-CHAP
+        mschap
+
+        # Lecture SQL (lookup user, check password, group membership avec isolation tenant)
+        sql
+
+        # Mapping du mot de passe hashé bcrypt vers Crypt-Password pour PAP
+        update control {
+            Crypt-Password := "%{sql:Crypt-Password}"
+        }
+
+        # Attributs appliqués au client Hotspot
+        update reply {
+            Simultaneous-Use := "%{sql:maxDevices}"
+            Session-Timeout := "%{expr:%{sql:durationMinutes} * 60}"
+            Mikrotik-Rate-Limit := "%{sql:uploadRate}k/%{sql:downloadRate}k"
+        }
+
+        # Log de l'autorisation
+        post-auth {
+            sql
+        }
+    }
+
+    # ─── AUTHENTICATION ──────────────────────────────────────────────────────
+    # Validation du mot de passe via PAP (compatible Crypt-Password / bcrypt).
+
+    authenticate {
+        # Authentification CHAP
+        Auth-Type CHAP {
+            chap
+        }
+
+        # Authentification MS-CHAPv2
+        Auth-Type MS-CHAP {
+            mschap
+        }
+
+        # Authentification PAP (vérifie le mot de passe clair contre Crypt-Password)
+        Auth-Type PAP {
+            pap
+        }
+    }
+
+    # ─── ACCOUNTING ──────────────────────────────────────────────────────────
+    # Reçoit les packets Accounting-Request (Start/Stop/Interim-Update).
+    # Écrit directement dans PostgreSQL via rlm_sql avec isolation tenant.
+
+    preacct {
+        preprocess
+        acct_unique
+        suffix
+    }
+
+    accounting {
+        # Écriture SQL directe (RadiusSession + RadiusAccounting)
+        sql
+
+        # Appel webhook backend avec secret d'authentification X-RADIUS-Secret
+        # (Optionnel si rlm_sql écrit directement en DB)
+        # rest {
+        #     uri = "http://127.0.0.1:4200/api/radius/accounting"
+        #     method = "POST"
+        #     header = "X-RADIUS-Secret: ${env.RADIUS_WEBHOOK_SECRET:-dev-radius-webhook-secret}"
+        #     body = json
+        #     data = "{\"nasIdentifier\": \"%{NAS-Identifier}\", \"username\": \"%{SQL-User-Name}\", \"sessionId\": \"%{Acct-Session-Id}\", \"statusType\": \"%{Acct-Status-Type}\", \"ipAddress\": \"%{Framed-IP-Address}\", \"macAddress\": \"%{Calling-Station-Id}\", \"inputOctets\": \"%{Acct-Input-Octets}\", \"outputOctets\": \"%{Acct-Output-Octets}\", \"sessionTime\": \"%{Acct-Session-Time}\", \"disconnectCause\": \"%{Acct-Terminate-Cause}\"}"
+        #     tls = no
+        # }
+    }
+
+    # ─── POST-AUTH ───────────────────────────────────────────────────────────
+    # Après authentification réussie.
+
+    post-auth {
+        # Mettre à jour le dernier auth du NAS
+        update {
+            &reply: += &session-state:
+        }
+
+        # Réponse standard avec attributes
+        sql
+    }
+
+    # ─── PRE-PROXY ───────────────────────────────────────────────────────────
+    pre-proxy {
+    }
+
+    # ─── POST-PROXY ──────────────────────────────────────────────────────────
+    post-proxy {
+    }
+}

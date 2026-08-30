@@ -1,0 +1,725 @@
+@import "tailwindcss";
+
+/* ==================== DESIGN SYSTEM ITSOLUTIONS ==================== */
+/* Conforme à ITSOLUTIONS_DOCUMENTATION_EXHAUSTIVE.md (Partie I) */
+
+:root {
+  /* Fond */
+  --bg-base: #05060a;
+  --bg-elevated: #0b0d14;
+
+  /* Surfaces vitrées */
+  --surface-glass: rgba(255, 255, 255, 0.06);
+  --surface-glass-hover: rgba(255, 255, 255, 0.1);
+  --border-glass: rgba(255, 255, 255, 0.12);
+  --border-glass-strong: rgba(255, 255, 255, 0.2);
+
+  /* Texte */
+  --text-primary: #f5f6fa;
+  --text-secondary: #a3a8bd;
+  --text-muted: #6b7086;
+  --text-disabled: #4a4e5e;
+
+  /* Accents */
+  --accent-primary: #5b7cfa;
+  --accent-primary-hover: #7191ff;
+  --accent-secondary: #b084f5;
+  --gradient-brand: linear-gradient(135deg, #5b7cfa 0%, #b084f5 100%);
+  --gradient-futuristic: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
+  --gradient-glow: linear-gradient(135deg, rgba(91,124,250,0.15) 0%, rgba(176,132,245,0.15) 100%);
+
+  /* Statuts */
+  --status-active: #3dd68c;
+  --status-active-bg: rgba(61, 214, 140, 0.12);
+  --status-pending: #f5b04d;
+  --status-pending-bg: rgba(245, 176, 77, 0.12);
+  --status-expired: #f5636b;
+  --status-expired-bg: rgba(245, 99, 107, 0.12);
+  --status-info: #5b9df5;
+
+  /* Élévation */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4);
+  --shadow-glow-primary: 0 0 32px rgba(91, 124, 250, 0.35);
+
+  /* Animations */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
+}
+
+[data-theme="light"] {
+  --bg-base: #f1f4fb;
+  --bg-elevated: #ffffff;
+
+  --surface-glass: rgba(255, 255, 255, 0.84);
+  --surface-glass-hover: rgba(255, 255, 255, 0.98);
+  --border-glass: rgba(91, 124, 250, 0.16);
+  --border-glass-strong: rgba(91, 124, 250, 0.45);
+
+  --text-primary: #0b1329;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-disabled: #cbd5e1;
+
+  --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 12px 32px rgba(91, 124, 250, 0.1), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 24px 48px rgba(91, 124, 250, 0.15), 0 4px 12px rgba(15, 23, 42, 0.06);
+  --shadow-glow-primary: 0 0 28px rgba(91, 124, 250, 0.35);
+}
+
+[data-theme="light"] .ambient-orb {
+  opacity: 0.38;
+  filter: blur(100px);
+}
+
+[data-theme="light"] .field-input,
+[data-theme="light"] .form-input {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+@theme inline {
+  --color-bg-base: var(--bg-base);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface-glass: var(--surface-glass);
+  --color-border-glass: var(--border-glass);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-status-active: var(--status-active);
+  --color-status-pending: var(--status-pending);
+  --color-status-expired: var(--status-expired);
+  --color-status-info: var(--status-info);
+  --font-sans: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans), Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* ==================== FOND AMBIANT (orbes flous) ==================== */
+
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(120px);
+  opacity: 0.25;
+}
+
+.ambient-orb--blue {
+  width: 480px;
+  height: 480px;
+  background: var(--accent-primary);
+  top: -120px;
+  left: -80px;
+}
+
+.ambient-orb--violet {
+  width: 420px;
+  height: 420px;
+  background: var(--accent-secondary);
+  top: 30%;
+  right: -120px;
+}
+
+.ambient-orb--blue-sm {
+  width: 320px;
+  height: 320px;
+  background: var(--accent-primary);
+  bottom: -100px;
+  left: 35%;
+}
+
+/* ==================== SURFACES VITRÉES ==================== */
+
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-md);
+}
+
+.glass-strong {
+  background: var(--surface-glass);
+  backdrop-filter: blur(32px) saturate(160%);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-lg);
+}
+
+.glass-hover {
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-base) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.glass-hover:hover {
+  background: var(--surface-glass-hover);
+  border-color: var(--border-glass-strong);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ==================== TEXTE & GRADIENT ==================== */
+
+.text-gradient {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mono {
+  font-family: var(--font-mono), monospace;
+}
+
+/* ==================== BOUTONS ==================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition:
+    box-shadow var(--duration-fast) var(--ease-standard),
+    filter var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+  user-select: none;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--gradient-brand);
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-glow-primary);
+  filter: brightness(1.08);
+}
+
+.btn-secondary {
+  background: var(--surface-glass);
+  color: var(--text-primary);
+  border: 1px solid var(--border-glass);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-glass-hover);
+  border-color: var(--border-glass-strong);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  height: 40px;
+  padding: 0 16px;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--surface-glass);
+}
+
+.btn-danger {
+  background: var(--status-expired);
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-sm {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ==================== CHECKBOX ==================== */
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-glass-strong);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  accent-color: var(--accent-primary);
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+
+.checkbox:checked {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.checkbox:hover {
+  border-color: var(--accent-primary);
+}
+
+/* ==================== CHAMPS DE FORMULAIRE ==================== */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label,
+.form-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.field-input,
+.form-input {
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+  width: 100%;
+}
+
+.field-input option,
+.form-input option {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.field-input::placeholder,
+.form-input::placeholder {
+  color: var(--text-muted);
+}
+
+.field-input:focus,
+.form-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(91, 124, 250, 0.2);
+}
+
+.field-input:disabled,
+.form-input:disabled {
+  opacity: 0.5;
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--status-expired);
+}
+
+/* ==================== BADGES DE STATUT ==================== */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.badge-active {
+  background: var(--status-active-bg);
+  color: var(--status-active);
+}
+.badge-active .badge-dot {
+  background: var(--status-active);
+  animation: pulse-dot 2.4s var(--ease-standard) infinite;
+}
+
+.badge-pending {
+  background: var(--status-pending-bg);
+  color: var(--status-pending);
+}
+.badge-pending .badge-dot {
+  background: var(--status-pending);
+  animation: pulse-dot 1.5s infinite;
+}
+
+.badge-expired {
+  background: var(--status-expired-bg);
+  color: var(--status-expired);
+}
+.badge-expired .badge-dot {
+  background: var(--status-expired);
+}
+
+.badge-info {
+  background: rgba(91, 157, 245, 0.12);
+  color: var(--status-info);
+}
+.badge-info .badge-dot {
+  background: var(--status-info);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ==================== NAVBAR FLOTTANTE ==================== */
+
+.floating-nav {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 48px);
+  max-width: 1280px;
+  height: 64px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px;
+  border-radius: 24px;
+}
+
+/* Responsive : logo réduit à la tuile seule et padding compact sur petits écrans */
+@media (max-width: 1023px) {
+  .floating-nav .logo-wordmark {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .floating-nav {
+    padding: 0 12px;
+  }
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fade-in-up var(--duration-slow) var(--ease-standard) backwards;
+}
+
+/* Entrée en cascade des sections (dashboard) */
+.animate-in,
+.animate-in--1,
+.animate-in--2,
+.animate-in--3,
+.animate-in--4,
+.animate-in--5,
+.animate-in--6 {
+  animation: fade-in-up var(--duration-slow) var(--ease-standard) backwards;
+}
+
+/* Carte solde wallet : entrée en fondu + lueur pulsante combinées (deux animations). */
+.animate-glow-in {
+  animation:
+    fade-in-up var(--duration-slow) var(--ease-standard) backwards,
+    pulse-glow 4s var(--ease-standard) infinite;
+}
+
+.animate-in--1 {
+  animation-delay: 90ms;
+}
+
+.animate-in--2 {
+  animation-delay: 180ms;
+}
+
+.animate-in--3 {
+  animation-delay: 270ms;
+}
+
+.animate-in--4 {
+  animation-delay: 360ms;
+}
+
+.animate-in--5 {
+  animation-delay: 450ms;
+}
+
+.animate-in--6 {
+  animation-delay: 540ms;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: 8px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-primary);
+  border-radius: 9999px;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==================== ANIMATIONS FUTURISTES ==================== */
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(0.8deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(91, 124, 250, 0.2);
+    border-color: rgba(91, 124, 250, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(176, 132, 245, 0.4);
+    border-color: rgba(176, 132, 245, 0.6);
+  }
+}
+
+.animate-float {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 4s ease-in-out infinite;
+}
+
+.card-futuristic {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.card-futuristic::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  pointer-events: none;
+  transition: 0.6s;
+}
+
+.card-futuristic:hover::before {
+  left: 100%;
+}
+
+.card-futuristic:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: 0 20px 40px rgba(91, 124, 250, 0.25);
+  border-color: rgba(91, 124, 250, 0.5);
+}
+
+.badge-rdc {
+  background: linear-gradient(135deg, rgba(0, 127, 255, 0.15) 0%, rgba(206, 17, 38, 0.15) 100%);
+  border: 1px solid rgba(247, 214, 0, 0.4);
+  color: var(--text-primary);
+}
+
+/* ==================== LOGO — ONDES WIFI PULSANTES ==================== */
+/* Effet « signal actif » : les ondes pulsent en cascade de l'intérieur vers l'extérieur. */
+
+.logo-wifi-arc {
+  animation: logo-wifi-pulse 2.6s var(--ease-standard) infinite;
+  animation-fill-mode: both;
+}
+
+.logo-wifi-arc--outer {
+  --arc-base: 0.92;
+  animation-delay: 0.6s;
+}
+
+.logo-wifi-arc--mid {
+  --arc-base: 0.72;
+  animation-delay: 0.3s;
+}
+
+.logo-wifi-arc--inner {
+  --arc-base: 0.55;
+  animation-delay: 0s;
+}
+
+.logo-wifi-dot {
+  animation: logo-dot-pulse 2.6s var(--ease-standard) infinite;
+  animation-fill-mode: both;
+}
+
+@keyframes logo-wifi-pulse {
+  0%,
+  100% {
+    opacity: var(--arc-base, 0.7);
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes logo-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ==================== NOM ANIMÉ (machine à écrire) ==================== */
+
+.typewriter-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  background: var(--accent-primary);
+  border-radius: 1px;
+  animation: typewriter-caret-blink 0.85s steps(1) infinite;
+}
+
+@keyframes typewriter-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ==================== ACCESSIBILITÉ ==================== */
+
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .glass,
+  .glass-strong {
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+}
