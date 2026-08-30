@@ -1,12 +1,23 @@
 import type { NextConfig } from "next";
 
+const getApiOrigin = (urlStr?: string) => {
+  if (!urlStr) return "";
+  try {
+    return new URL(urlStr).origin;
+  } catch {
+    return urlStr;
+  }
+};
+
+const apiOrigin = getApiOrigin(process.env.NEXT_PUBLIC_API_URL);
+
 const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline';
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https:;
   font-src 'self' https://fonts.gstatic.com;
-  connect-src 'self' http://localhost:4200 ${process.env.NEXT_PUBLIC_API_URL || ""};
+  connect-src 'self' http://localhost:4200 http://localhost:5000 ${apiOrigin} https://*.onrender.com;
   frame-ancestors 'none';
   base-uri 'self';
   form-action 'self';
