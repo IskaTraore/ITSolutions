@@ -98,8 +98,22 @@ router.post("/register", registerRateLimit, validate(registerSchema), async (req
 
     await notify(user, "EMAIL_VERIFICATION", {
       channel: "EMAIL",
-      subject: "Vérifiez votre adresse email",
+      subject: "Vérifiez votre adresse email - ITSOLUTIONS",
       text: `Bienvenue sur ITSOLUTIONS.\n\nCliquez sur ce lien pour vérifier votre adresse email :\n${verifyUrl}\n\nSi vous n'avez pas créé de compte, ignorez ce message.`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">Bienvenue sur ITSOLUTIONS</h2>
+          <p style="color: #475569; font-size: 15px; line-height: 24px;">Merci pour votre inscription. Veuillez confirmer votre adresse email pour activer votre compte :</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${verifyUrl}" style="background-color: #3b82f6; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; display: inline-block;">
+              Vérifier mon adresse email
+            </a>
+          </div>
+          <p style="color: #64748b; font-size: 13px; line-height: 20px;">Ou copiez et collez ce lien dans votre navigateur :<br><a href="${verifyUrl}" style="color: #3b82f6; word-break: break-all;">${verifyUrl}</a></p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+          <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.</p>
+        </div>
+      `,
     });
 
     const response = { user: publicUser(user), message: "Compte créé avec succès. Veuillez vérifier votre adresse email." };
@@ -107,6 +121,62 @@ router.post("/register", registerRateLimit, validate(registerSchema), async (req
       response.verificationToken = verificationToken;
     }
     res.status(201).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+const resendVerificationSchema = z.object({
+  email: z.string().email("Email invalide"),
+});
+
+router.post("/resend-verification", validate(resendVerificationSchema), async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.json({ message: "Si cette adresse existe, un email de vérification a été envoyé." });
+    }
+
+    if (user.emailVerified) {
+      return res.json({ message: "Cette adresse email est déjà vérifiée." });
+    }
+
+    const verificationToken = generateVerificationToken();
+    const tokenHash = sha256(verificationToken);
+    const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationTokenHash: tokenHash,
+        verificationTokenExpiresAt: tokenExpiresAt,
+      },
+    });
+
+    const verifyUrl = `${env.clientUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`;
+
+    await notify(user, "EMAIL_VERIFICATION", {
+      channel: "EMAIL",
+      subject: "Vérifiez votre adresse email - ITSOLUTIONS",
+      text: `Bienvenue sur ITSOLUTIONS.\n\nCliquez sur ce lien pour vérifier votre adresse email :\n${verifyUrl}\n\nSi vous n'avez pas créé de compte, ignorez ce message.`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">Bienvenue sur ITSOLUTIONS</h2>
+          <p style="color: #475569; font-size: 15px; line-height: 24px;">Voici votre nouveau lien pour confirmer votre adresse email :</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${verifyUrl}" style="background-color: #3b82f6; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; display: inline-block;">
+              Vérifier mon adresse email
+            </a>
+          </div>
+          <p style="color: #64748b; font-size: 13px; line-height: 20px;">Ou copiez et collez ce lien dans votre navigateur :<br><a href="${verifyUrl}" style="color: #3b82f6; word-break: break-all;">${verifyUrl}</a></p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+          <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.</p>
+        </div>
+      `,
+    });
+
+    res.json({ message: "Un nouvel email de vérification a été envoyé." });
   } catch (err) {
     next(err);
   }

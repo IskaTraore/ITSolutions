@@ -19,10 +19,11 @@ async function sendEmail({ to, subject, text, html }) {
     return true;
   }
 
+  const portNumber = parseInt(port, 10) || 587;
   const transporter = nodemailer.createTransport({
     host,
-    port: Number(port) || 587,
-    secure: Number(port) === 465,
+    port: portNumber,
+    secure: portNumber === 465,
     auth: {
       user,
       pass,
@@ -30,6 +31,9 @@ async function sendEmail({ to, subject, text, html }) {
     tls: {
       rejectUnauthorized: false,
     },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
   });
 
   const info = await transporter.sendMail({
@@ -77,6 +81,7 @@ async function notify(user, type, payload) {
           to: user.email,
           subject: payload.subject || "ITSOLUTIONS",
           text: payload.text || "",
+          html: payload.html || undefined,
         });
       } else if (channel === "WHATSAPP") {
         await sendWhatsApp({ to: user.phone || user.email, text: payload.text || "" });
